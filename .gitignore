@@ -1,0 +1,12 @@
+*.csv
+saved_models_equality/
+huggingface_cache/
+saved_models_nli/
+archived_results/
+datasets/
+fig/
+saved_models_arithmetic/
+saved_models_hierarchical/
+.ipynb_checkpoints/
+__pycache__/
+saved_models/
