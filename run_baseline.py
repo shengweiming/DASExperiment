@@ -95,11 +95,11 @@ TOKENIZER = BertTokenizer.from_pretrained(WEIGHTS_NAME)
 def _encode(X):
     """Tokenise a (premise, hypothesis) pair into BERT inputs."""
     text = [". ".join(X)] if X[0][-1] != "." else [" ".join(X)]
-    out = TOKENIZER.batch_encode_plus(
+    out = TOKENIZER(
         text, max_length=MAX_LENGTH, add_special_tokens=True,
         padding="max_length", truncation=True,
-        return_attention_mask=True)
-    return torch.tensor(out["input_ids"]), torch.tensor(out["attention_mask"])
+        return_attention_mask=True, return_tensors="pt")
+    return out["input_ids"], out["attention_mask"]
 
 
 def load_factual(n, split):
