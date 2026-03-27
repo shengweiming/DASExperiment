@@ -15,14 +15,14 @@ Experiment:
   - Report IIA (Interchange Intervention Accuracy)
 """
 
-# ── 0. Install dependencies ────────────────────────────────
+# ── 0. Install dependencies ────────────────────────────────────
 import subprocess, sys
 
 subprocess.check_call(
     [sys.executable, "-m", "pip", "install", "-q", "transformers"],
     stdout=subprocess.DEVNULL)
 
-# ── 1. Repo & data setup ───────────────────────────────────
+# ── 1. Repo & data setup ─────────────────────────────────────
 import os, urllib.request
 
 # Navigate into the repo root if we aren't already there
@@ -206,7 +206,7 @@ def run():
         print("\n[1/3] Fine-tuning BERT on MoNLI factual task ...")
 
         ckpt_path = f"saved_models_nli/factual-{seed}.bin"
-        bert = BertModel.from_pretrained(WEIGHTS_NAME)
+        bert = BertModel.from_pretrained(WEIGHTS_NAME, attn_implementation="eager")
         factual_model = LIMBERTClassifier(
             n_classes=2, bert=bert, max_length=MAX_LENGTH,
             debug=False, target_dims=TARGET_DIMS, target_layers=[],
@@ -235,18 +235,18 @@ def run():
         del factual_model, factual_trainer, bert
         torch.cuda.empty_cache()
 
-        # ── B.  Build IIT datasets ─────────────────────────
+        # ── B.  Build IIT datasets ─────────────────────
         print("\n[2/3] Building interchange-intervention datasets ...")
         utils.fix_random_seeds(seed)
 
         train_iit = load_combined_iit(DAS_TRAIN, "train")
         test_iit  = load_combined_iit(DAS_TEST,  "test")
 
-        # ── C.  Train DAS rotation matrix ──────────────────
+        # ── C.  Train DAS rotation matrix ────────────────
         print(f"\n[3/3] Training DAS rotation "
               f"(layer {IIT_LAYER + 1}, {DIM_PER_VAR} dims) ...")
 
-        bert_das = BertModel.from_pretrained(WEIGHTS_NAME)
+        bert_das = BertModel.from_pretrained(WEIGHTS_NAME, attn_implementation="eager")
         das_model = LIMBERTClassifier(
             n_classes=2, bert=bert_das, max_length=MAX_LENGTH,
             debug=False, target_dims=TARGET_DIMS,
@@ -273,7 +273,7 @@ def run():
             iit_data=(train_iit[2], train_iit[3], train_iit[4]),
             intervention_ids_to_coords=alignment)
 
-        # ── D.  Evaluate IIA ───────────────────────────────
+        # ── D.  Evaluate IIA ───────────────────────
         print("\n      Evaluating IIA on test set ...")
 
         # Factual accuracy (should stay high)
@@ -305,7 +305,7 @@ def run():
         del das_model, das_trainer, bert_das
         torch.cuda.empty_cache()
 
-    # ── Final summary ──────────────────────────────────────
+    # ── Final summary ────────────────────────────────────────
     print("\n" + "=" * 60)
     print("  RESULTS:  MoNLI DAS  (Layer 9, 256 dims per variable)")
     print("  High-level model: Negation + Lexical Entailment")
