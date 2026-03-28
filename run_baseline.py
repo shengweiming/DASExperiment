@@ -58,6 +58,10 @@ if "--retrain" in sys.argv:
     for f in glob.glob("saved_models_nli/factual-*.bin"):
         os.remove(f)
         print(f"  Deleted stale checkpoint: {f}")
+    _results_path = os.path.join("saved_models_nli", "results_so_far.json")
+    if os.path.exists(_results_path):
+        os.remove(_results_path)
+        print(f"  Deleted stale results: {_results_path}")
 
 # ── 2. Imports ──────────────────────────────────────────────
 import copy, json, random
@@ -211,9 +215,21 @@ def run():
              "end": 2 * DIM_PER_VAR}],
     }
 
+    RESULTS_FILE = "saved_models_nli/results_so_far.json"
+
+    # Load any results saved from a previous (interrupted) run
     results = []
+    if os.path.exists(RESULTS_FILE):
+        with open(RESULTS_FILE) as f:
+            results = json.load(f)
+    completed_seeds = {r["seed"] for r in results}
 
     for seed in SEEDS:
+        if seed in completed_seeds:
+            print(f"\n  SEED {seed}: already completed, skipping. "
+                  f"(Delete {RESULTS_FILE} to rerun.)")
+            continue
+
         print(f"\n{'=' * 60}")
         print(f"  SEED {seed}")
         print(f"{'=' * 60}")
@@ -348,6 +364,11 @@ def run():
 
         del das_model, das_trainer, bert_das
         torch.cuda.empty_cache()
+
+        # Save results incrementally so progress survives disconnects
+        with open(RESULTS_FILE, "w") as f:
+            json.dump(results, f, indent=2)
+        print(f"      Results saved to {RESULTS_FILE}")
 
     # ── Final summary ────────────────────────────────────────
     print("\n" + "=" * 60)
