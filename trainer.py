@@ -1,4 +1,5 @@
 import copy
+import sys
 import numpy as np
 import pickle
 import time
@@ -365,6 +366,8 @@ class LIMTrainer:
         self.model.train()
         self.optimizer.zero_grad()
 
+        n_batches = len(dataloader)
+
         for iteration in range(1, self.max_iter+1):
 
             epoch_error = 0.0
@@ -400,6 +403,15 @@ class LIMTrainer:
                             self.model.parameters(), self.max_grad_norm)
                     self.optimizer.step()
                     self.optimizer.zero_grad()
+
+                if self.display_progress and batch_num % max(1, n_batches // 10) == 0:
+                    pct = 100 * batch_num / n_batches
+                    elapsed = time.time() - epoch_start
+                    utils.progress_bar(
+                        f"  Epoch {iteration}/{self.max_iter}  "
+                        f"[{batch_num}/{n_batches} {pct:.0f}%]  "
+                        f"loss={epoch_error/batch_num:.4f}  "
+                        f"{elapsed:.0f}s")
             
             if save_checkpoint_per_epoch_overwrite:
                 PATH = f"{save_checkpoint_prefix}-{iteration}-{self.model.num_layers}-{self.model.hidden_dim}-{self.seed}.bin"
@@ -434,10 +446,10 @@ class LIMTrainer:
                     break
 
             elapsed = time.time() - epoch_start
-            utils.progress_bar(
-                "Finished epoch {} of {}; error is {:.4f}; {:.1f}s".format(
-                    iteration, self.max_iter, epoch_error, elapsed),
-                verbose=self.display_progress)
+            if self.display_progress:
+                print(f"\r  Epoch {iteration}/{self.max_iter} done  "
+                      f"error={epoch_error:.4f}  {elapsed:.1f}s",
+                      file=sys.stderr, flush=True)
 
         if self.early_stopping:
             self.model.load_state_dict(self.best_parameters)
