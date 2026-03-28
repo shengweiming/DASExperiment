@@ -19,7 +19,8 @@ Experiment:
 import subprocess, sys
 
 subprocess.check_call(
-    [sys.executable, "-m", "pip", "install", "-q", "transformers"],
+    [sys.executable, "-m", "pip", "install", "-q",
+     "transformers==4.36.2", "torch", "scikit-learn", "pandas", "scipy"],
     stdout=subprocess.DEVNULL)
 
 # ── 1. Repo & data setup ─────────────────────────────────────
