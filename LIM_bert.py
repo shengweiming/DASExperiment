@@ -151,19 +151,16 @@ class LIMBertLayer(torch.nn.Module):
         layer_head_mask = head_mask[layer_num] if head_mask is not None else None
         past_key_value = past_key_values[layer_num] if past_key_values is not None else None
 
-        layer_kwargs = dict(
-            hidden_states=hidden_states,
-            attention_mask=attention_mask,
-            head_mask=layer_head_mask,
-            encoder_hidden_states=encoder_hidden_states,
-            encoder_attention_mask=encoder_attention_mask,
-            output_attentions=output_attentions,
+        # Use positional args matching BertLayer.forward in transformers 4.30.2
+        layer_outputs = self.layer(
+            hidden_states,
+            attention_mask,
+            layer_head_mask,
+            encoder_hidden_states,
+            encoder_attention_mask,
+            past_key_value,
+            output_attentions,
         )
-        # past_key_value support was removed in newer transformers
-        import inspect
-        if "past_key_value" in inspect.signature(self.layer.forward).parameters:
-            layer_kwargs["past_key_value"] = past_key_value
-        layer_outputs = self.layer(**layer_kwargs)
 
         hidden_states = layer_outputs[0]
         if use_cache:
