@@ -91,7 +91,8 @@ class SequentialLayers(torch.nn.Module):
         suffix = None
         
         first_linear = True
-        first_inverse = True
+        n_inverse = sum(1 for l in self.layers if isinstance(l, InverseLinearLayer))
+        inverse_seen = 0
         for layer in self.layers[1:]:
             if isinstance(layer, LinearLayer):
                 if first_linear:
@@ -110,11 +111,11 @@ class SequentialLayers(torch.nn.Module):
                 else:
                     args = layer(target)
             elif isinstance(layer, InverseLinearLayer):
-                if first_inverse:
-                    args = layer(args)
-                    first_inverse = False
-                else:
-                    args = (torch.cat([prefix, layer(args), suffix], 1).reshape(original_shape), *rest)
+                args = layer(args)
+                inverse_seen += 1
+                if inverse_seen == n_inverse:
+                    # Last inverse layer: reconstitute full arg tuple
+                    args = (torch.cat([prefix, args, suffix], 1).reshape(original_shape), *rest)
             else:
                 args = layer(*args)
         return args
@@ -265,7 +266,7 @@ class LIMBERTClassifier(LayeredIntervenableModel):
             param.requires_grad = True
         for param in self.pooler.parameters():
             param.requires_grad = True
-        super().freeze_model_parameters()
+        super().unfreeze_model_parameters()
         
     def forward(self, pair):
         """Computes a forward pass with input `X`."""
