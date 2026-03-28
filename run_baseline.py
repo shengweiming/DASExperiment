@@ -73,7 +73,7 @@ from trainer import BERTLIMTrainer
 
 # ── 3. Experiment configuration ────────────────────────────
 WEIGHTS_NAME   = "ishan/bert-base-uncased-mnli"
-MAX_LENGTH     = 128
+MAX_LENGTH     = 40
 SEEDS          = [42, 66, 77]
 
 # Layer 9 in the paper = index 8 in the 0-indexed analysis_model
