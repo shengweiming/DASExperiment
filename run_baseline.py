@@ -7,6 +7,9 @@ Interpretable Neural Networks" (ICML 2022).
 Runs end-to-end on Google Colab (T4 GPU) or any CUDA machine:
     !python run_baseline.py
 
+Use --retrain to delete saved checkpoints and retrain from scratch:
+    !python run_baseline.py --retrain
+
 Experiment:
   - Fine-tune ishan/bert-base-uncased-mnli on MoNLI factual task
   - Run Distributed Alignment Search (DAS) with the
@@ -24,7 +27,7 @@ subprocess.check_call(
     stdout=subprocess.DEVNULL)
 
 # ── 1. Repo & data setup ─────────────────────────────────────
-import os, urllib.request
+import glob, os, time, urllib.request
 
 # Navigate into the repo root if we aren't already there
 if not os.path.exists("layered_intervenable_model.py"):
@@ -49,6 +52,12 @@ for _fname in ["pmonli.jsonl", "nmonli_train.jsonl", "nmonli_test.jsonl"]:
         urllib.request.urlretrieve(f"{_MONLI_URL}/{_fname}", _path)
 
 os.makedirs("saved_models_nli", exist_ok=True)
+
+# Handle --retrain flag
+if "--retrain" in sys.argv:
+    for f in glob.glob("saved_models_nli/factual-*.bin"):
+        os.remove(f)
+        print(f"  Deleted stale checkpoint: {f}")
 
 # ── 2. Imports ──────────────────────────────────────────────
 import copy, json, random
@@ -92,15 +101,22 @@ DAS_TEST       = 1_920
 # ── 4. Data-loading helpers (from experiment notebook) ─────
 TOKENIZER = BertTokenizer.from_pretrained(WEIGHTS_NAME)
 
+_ENCODE_CACHE = {}
 
 def _encode(X):
-    """Tokenise a (premise, hypothesis) pair into BERT inputs."""
+    """Tokenise a (premise, hypothesis) pair into BERT inputs.
+    Results are cached so repeated calls with the same text are free."""
+    key = (X[0], X[1])
+    if key in _ENCODE_CACHE:
+        return _ENCODE_CACHE[key]
     text = [". ".join(X)] if X[0][-1] != "." else [" ".join(X)]
     out = TOKENIZER(
         text, max_length=MAX_LENGTH, add_special_tokens=True,
         padding="max_length", truncation=True,
         return_attention_mask=True, return_tensors="pt")
-    return out["input_ids"], out["attention_mask"]
+    result = (out["input_ids"], out["attention_mask"])
+    _ENCODE_CACHE[key] = result
+    return result
 
 
 def load_factual(n, split):
@@ -213,6 +229,7 @@ def run():
         else:
             print("\n[1/3] Fine-tuning BERT on MoNLI factual task ...")
 
+            t0 = time.time()
             bert = BertModel.from_pretrained(WEIGHTS_NAME, attn_implementation="eager")
             factual_model = LIMBERTClassifier(
                 n_classes=2, bert=bert, max_length=MAX_LENGTH,
@@ -227,8 +244,12 @@ def run():
                 shuffle_train=True, eta=FACTUAL_LR,
                 device=device, seed=seed)
 
+            t1 = time.time()
+            print(f"      Loading data ...")
             X_tr, y_tr = load_factual(FACTUAL_TRAIN, "train")
             X_te, y_te = load_factual(FACTUAL_TEST,  "test")
+            print(f"      Data loaded in {time.time()-t1:.1f}s "
+                  f"(cache size: {len(_ENCODE_CACHE)})")
 
             factual_trainer.fit(X_tr, y_tr)
 
@@ -236,7 +257,8 @@ def run():
             fact_report = classification_report(
                 y_te, preds.cpu(), output_dict=True)
             fact_f1 = fact_report["weighted avg"]["f1-score"]
-            print(f"      Factual test F1 = {fact_f1:.4f}")
+            print(f"\n      Factual test F1 = {fact_f1:.4f}  "
+                  f"({time.time()-t0:.1f}s total)")
 
             torch.save(factual_model.state_dict(), ckpt_path)
             del factual_model, factual_trainer, bert
@@ -244,10 +266,19 @@ def run():
 
         # ── B.  Build IIT datasets ─────────────────────
         print("\n[2/3] Building interchange-intervention datasets ...")
+        _ENCODE_CACHE.clear()
         utils.fix_random_seeds(seed)
 
+        t0 = time.time()
         train_iit = load_combined_iit(DAS_TRAIN, "train")
+        t1 = time.time()
+        print(f"      Train set: {t1-t0:.1f}s  "
+              f"(cache: {len(_ENCODE_CACHE)} entries)")
+
         test_iit  = load_combined_iit(DAS_TEST,  "test")
+        t2 = time.time()
+        print(f"      Test set:  {t2-t1:.1f}s  "
+              f"(cache: {len(_ENCODE_CACHE)} entries)")
 
         # ── C.  Train DAS rotation matrix ────────────────
         print(f"\n[3/3] Training DAS rotation "
@@ -261,7 +292,8 @@ def run():
             static_search=False, nested_disentangle_inplace=False)
 
         # Load factual weights, remapping analysis_model keys
-        saved_sd = torch.load(ckpt_path, map_location="cpu")
+        saved_sd = torch.load(ckpt_path, map_location="cpu",
+                              weights_only=True)
         das_model.load_state_dict(
             remap_factual_weights(saved_sd, IIT_LAYER), strict=False)
 
@@ -275,13 +307,15 @@ def run():
             shuffle_train=False, eta=DAS_LR,
             device=device, seed=seed)
 
+        t0 = time.time()
         das_trainer.fit(
             train_iit[0], train_iit[1],
             iit_data=(train_iit[2], train_iit[3], train_iit[4]),
             intervention_ids_to_coords=alignment)
+        print(f"\n      DAS training: {time.time()-t0:.1f}s")
 
         # ── D.  Evaluate IIA ───────────────────────
-        print("\n      Evaluating IIA on test set ...")
+        print("      Evaluating IIA on test set ...")
 
         # Factual accuracy (should stay high)
         test_base_preds = das_trainer.predict(test_iit[0])

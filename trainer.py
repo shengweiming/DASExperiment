@@ -1,6 +1,7 @@
 import copy
 import numpy as np
 import pickle
+import time
 from sklearn.model_selection import train_test_split
 import torch
 import torch.nn as nn
@@ -367,6 +368,7 @@ class LIMTrainer:
         for iteration in range(1, self.max_iter+1):
 
             epoch_error = 0.0
+            epoch_start = time.time()
 
             for batch_num, batch in enumerate(dataloader, start=1):
                 batch = [x.to(self.device) for x in batch]
@@ -431,9 +433,10 @@ class LIMTrainer:
                         verbose=self.display_progress)
                     break
 
+            elapsed = time.time() - epoch_start
             utils.progress_bar(
-                "Finished epoch {} of {}; error is {}".format(
-                    iteration, self.max_iter, epoch_error),
+                "Finished epoch {} of {}; error is {:.4f}; {:.1f}s".format(
+                    iteration, self.max_iter, epoch_error, elapsed),
                 verbose=self.display_progress)
 
         if self.early_stopping:
