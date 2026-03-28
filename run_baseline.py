@@ -203,37 +203,43 @@ def run():
         utils.fix_random_seeds(seed)
 
         # ── A.  Fine-tune BERT on factual MoNLI ────────────
-        print("\n[1/3] Fine-tuning BERT on MoNLI factual task ...")
-
         ckpt_path = f"saved_models_nli/factual-{seed}.bin"
-        bert = BertModel.from_pretrained(WEIGHTS_NAME, attn_implementation="eager")
-        factual_model = LIMBERTClassifier(
-            n_classes=2, bert=bert, max_length=MAX_LENGTH,
-            debug=False, target_dims=TARGET_DIMS, target_layers=[],
-            device=device, static_search=False,
-            nested_disentangle_inplace=False)
 
-        factual_trainer = BERTLIMTrainer(
-            factual_model,
-            warm_start=False, max_iter=FACTUAL_EPOCHS,
-            batch_size=FACTUAL_BS, n_iter_no_change=10000,
-            shuffle_train=True, eta=FACTUAL_LR,
-            device=device, seed=seed)
+        if os.path.exists(ckpt_path):
+            print(f"\n[1/3] Found saved checkpoint {ckpt_path}, "
+                  f"skipping fine-tuning.")
+            fact_f1 = None
+        else:
+            print("\n[1/3] Fine-tuning BERT on MoNLI factual task ...")
 
-        X_tr, y_tr = load_factual(FACTUAL_TRAIN, "train")
-        X_te, y_te = load_factual(FACTUAL_TEST,  "test")
+            bert = BertModel.from_pretrained(WEIGHTS_NAME, attn_implementation="eager")
+            factual_model = LIMBERTClassifier(
+                n_classes=2, bert=bert, max_length=MAX_LENGTH,
+                debug=False, target_dims=TARGET_DIMS, target_layers=[],
+                device=device, static_search=False,
+                nested_disentangle_inplace=False)
 
-        factual_trainer.fit(X_tr, y_tr)
+            factual_trainer = BERTLIMTrainer(
+                factual_model,
+                warm_start=False, max_iter=FACTUAL_EPOCHS,
+                batch_size=FACTUAL_BS, n_iter_no_change=10000,
+                shuffle_train=True, eta=FACTUAL_LR,
+                device=device, seed=seed)
 
-        preds = factual_trainer.predict(X_te)
-        fact_report = classification_report(
-            y_te, preds.cpu(), output_dict=True)
-        fact_f1 = fact_report["weighted avg"]["f1-score"]
-        print(f"      Factual test F1 = {fact_f1:.4f}")
+            X_tr, y_tr = load_factual(FACTUAL_TRAIN, "train")
+            X_te, y_te = load_factual(FACTUAL_TEST,  "test")
 
-        torch.save(factual_model.state_dict(), ckpt_path)
-        del factual_model, factual_trainer, bert
-        torch.cuda.empty_cache()
+            factual_trainer.fit(X_tr, y_tr)
+
+            preds = factual_trainer.predict(X_te)
+            fact_report = classification_report(
+                y_te, preds.cpu(), output_dict=True)
+            fact_f1 = fact_report["weighted avg"]["f1-score"]
+            print(f"      Factual test F1 = {fact_f1:.4f}")
+
+            torch.save(factual_model.state_dict(), ckpt_path)
+            del factual_model, factual_trainer, bert
+            torch.cuda.empty_cache()
 
         # ── B.  Build IIT datasets ─────────────────────
         print("\n[2/3] Building interchange-intervention datasets ...")
@@ -298,7 +304,10 @@ def run():
         results.append(result)
 
         print(f"\n      Seed {seed} results:")
-        print(f"        Factual test F1         = {fact_f1:.4f}")
+        if fact_f1 is not None:
+            print(f"        Factual test F1         = {fact_f1:.4f}")
+        else:
+            print(f"        Factual test F1         = (loaded from checkpoint)")
         print(f"        DAS factual test F1     = {test_fact_f1:.4f}")
         print(f"        DAS test IIA            = {test_iia:.4f}")
 
@@ -314,7 +323,8 @@ def run():
     print(hdr)
     print("-" * len(hdr))
     for r in results:
-        print(f"{r['seed']:>6}  {r['factual_f1']:>11.4f}  "
+        f1_str = f"{r['factual_f1']:>11.4f}" if r['factual_f1'] is not None else "       ckpt"
+        print(f"{r['seed']:>6}  {f1_str}  "
               f"{r['das_fact_f1']:>12.4f}  {r['test_iia']:>10.4f}")
 
     best = max(results, key=lambda r: r["test_iia"])
