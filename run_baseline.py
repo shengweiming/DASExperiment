@@ -20,7 +20,7 @@ import subprocess, sys
 
 subprocess.check_call(
     [sys.executable, "-m", "pip", "install", "-q",
-     "transformers==4.30.2", "torch", "scikit-learn", "pandas", "scipy"],
+     "transformers==4.36.2", "torch", "scikit-learn", "pandas", "scipy"],
     stdout=subprocess.DEVNULL)
 
 # ── 1. Repo & data setup ─────────────────────────────────────
@@ -207,7 +207,7 @@ def run():
         print("\n[1/3] Fine-tuning BERT on MoNLI factual task ...")
 
         ckpt_path = f"saved_models_nli/factual-{seed}.bin"
-        bert = BertModel.from_pretrained(WEIGHTS_NAME)
+        bert = BertModel.from_pretrained(WEIGHTS_NAME, attn_implementation="eager")
         factual_model = LIMBERTClassifier(
             n_classes=2, bert=bert, max_length=MAX_LENGTH,
             debug=False, target_dims=TARGET_DIMS, target_layers=[],
@@ -247,7 +247,7 @@ def run():
         print(f"\n[3/3] Training DAS rotation "
               f"(layer {IIT_LAYER + 1}, {DIM_PER_VAR} dims) ...")
 
-        bert_das = BertModel.from_pretrained(WEIGHTS_NAME)
+        bert_das = BertModel.from_pretrained(WEIGHTS_NAME, attn_implementation="eager")
         das_model = LIMBERTClassifier(
             n_classes=2, bert=bert_das, max_length=MAX_LENGTH,
             debug=False, target_dims=TARGET_DIMS,
