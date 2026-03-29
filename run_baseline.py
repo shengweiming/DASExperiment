@@ -26,8 +26,25 @@ subprocess.check_call(
      "transformers==4.36.2", "torch", "scikit-learn", "pandas", "scipy"],
     stdout=subprocess.DEVNULL)
 
-# ── 1. Repo & data setup ─────────────────────────────────────
+# ── 0.5. Mount Google Drive for persistent storage ────────────
 import glob, os, time, urllib.request
+
+DRIVE_DIR = "/content/drive/MyDrive/DAS_experiment"
+
+try:
+    from google.colab import drive
+    drive.mount("/content/drive")
+    os.makedirs(DRIVE_DIR, exist_ok=True)
+    SAVE_DIR = os.path.join(DRIVE_DIR, "saved_models_nli")
+    os.makedirs(SAVE_DIR, exist_ok=True)
+    print(f"Google Drive mounted. Saving to {SAVE_DIR}")
+except ImportError:
+    # Not running on Colab — use local directory
+    SAVE_DIR = "saved_models_nli"
+    os.makedirs(SAVE_DIR, exist_ok=True)
+    print(f"Not on Colab. Saving to {SAVE_DIR}")
+
+# ── 1. Repo & data setup ─────────────────────────────────────
 
 # Navigate into the repo root if we aren't already there
 if not os.path.exists("layered_intervenable_model.py"):
@@ -51,14 +68,12 @@ for _fname in ["pmonli.jsonl", "nmonli_train.jsonl", "nmonli_test.jsonl"]:
         print(f"  Downloading {_fname} ...")
         urllib.request.urlretrieve(f"{_MONLI_URL}/{_fname}", _path)
 
-os.makedirs("saved_models_nli", exist_ok=True)
-
 # Handle --retrain flag
 if "--retrain" in sys.argv:
-    for f in glob.glob("saved_models_nli/factual-*.bin"):
+    for f in glob.glob(os.path.join(SAVE_DIR, "factual-*.bin")):
         os.remove(f)
         print(f"  Deleted stale checkpoint: {f}")
-    _results_path = os.path.join("saved_models_nli", "results_so_far.json")
+    _results_path = os.path.join(SAVE_DIR, "results_so_far.json")
     if os.path.exists(_results_path):
         os.remove(_results_path)
         print(f"  Deleted stale results: {_results_path}")
@@ -215,7 +230,7 @@ def run():
              "end": 2 * DIM_PER_VAR}],
     }
 
-    RESULTS_FILE = "saved_models_nli/results_so_far.json"
+    RESULTS_FILE = os.path.join(SAVE_DIR, "results_so_far.json")
 
     # Load any results saved from a previous (interrupted) run
     results = []
@@ -236,7 +251,7 @@ def run():
         utils.fix_random_seeds(seed)
 
         # ── A.  Fine-tune BERT on factual MoNLI ────────────
-        ckpt_path = f"saved_models_nli/factual-{seed}.bin"
+        ckpt_path = os.path.join(SAVE_DIR, f"factual-{seed}.bin")
 
         if os.path.exists(ckpt_path):
             print(f"\n[1/3] Found saved checkpoint {ckpt_path}, "
@@ -365,7 +380,7 @@ def run():
         del das_model, das_trainer, bert_das
         torch.cuda.empty_cache()
 
-        # Save results incrementally so progress survives disconnects
+        # Save results incrementally (persists to Drive on Colab)
         with open(RESULTS_FILE, "w") as f:
             json.dump(results, f, indent=2)
         print(f"      Results saved to {RESULTS_FILE}")

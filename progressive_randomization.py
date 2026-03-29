@@ -30,8 +30,26 @@ subprocess.check_call(
      "transformers==4.36.2", "torch", "scikit-learn", "pandas", "scipy"],
     stdout=subprocess.DEVNULL)
 
-# ── 1. Repo & data setup ─────────────────────────────────────
+# ── 0.5. Mount Google Drive for persistent storage ────────────
 import glob, os, time, urllib.request
+
+DRIVE_DIR = "/content/drive/MyDrive/DAS_experiment"
+
+try:
+    from google.colab import drive
+    drive.mount("/content/drive")
+    os.makedirs(DRIVE_DIR, exist_ok=True)
+    SAVE_DIR = os.path.join(DRIVE_DIR, "saved_models_nli_progressive")
+    BASELINE_DIR = os.path.join(DRIVE_DIR, "saved_models_nli")
+    os.makedirs(SAVE_DIR, exist_ok=True)
+    print(f"Google Drive mounted. Saving to {SAVE_DIR}")
+except ImportError:
+    SAVE_DIR = "saved_models_nli_progressive"
+    BASELINE_DIR = "saved_models_nli"
+    os.makedirs(SAVE_DIR, exist_ok=True)
+    print(f"Not on Colab. Saving to {SAVE_DIR}")
+
+# ── 1. Repo & data setup ─────────────────────────────────────
 
 if not os.path.exists("layered_intervenable_model.py"):
     if os.path.exists("GeigerExperiment/layered_intervenable_model.py"):
@@ -53,9 +71,6 @@ for _fname in ["pmonli.jsonl", "nmonli_train.jsonl", "nmonli_test.jsonl"]:
         print(f"  Downloading {_fname} ...")
         urllib.request.urlretrieve(f"{_MONLI_URL}/{_fname}", _path)
 
-SAVE_DIR = "saved_models_nli_progressive"
-os.makedirs(SAVE_DIR, exist_ok=True)
-
 # ── 2. Imports ──────────────────────────────────────────────
 import copy, json, random
 import numpy as np
@@ -71,13 +86,13 @@ from trainer import BERTLIMTrainer
 
 # ── 3. Configuration ───────────────────────────────────────
 WEIGHTS_NAME   = "ishan/bert-base-uncased-mnli"
-MAX_LENGTH     = 40
+MAX_LENGTH     = 40      # must match run_baseline.py
 SEED           = 77
 IIT_LAYER      = 8    # Layer 9 (0-indexed)
 DIM_PER_VAR    = 256
 TARGET_DIMS    = {"start": 0, "end": 786}
 
-FACTUAL_CKPT   = "saved_models_nli/factual-77.bin"
+FACTUAL_CKPT   = os.path.join(BASELINE_DIR, "factual-77.bin")
 
 DAS_EPOCHS     = 5
 DAS_LR         = 2e-3

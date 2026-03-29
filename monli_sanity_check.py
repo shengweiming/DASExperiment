@@ -25,8 +25,24 @@ subprocess.check_call(
      "transformers==4.36.2", "torch", "scikit-learn", "pandas", "scipy"],
     stdout=subprocess.DEVNULL)
 
-# ── 1. Repo & data setup ─────────────────────────────────────
+# ── 0.5. Mount Google Drive for persistent storage ────────────
 import glob, os, time, urllib.request
+
+DRIVE_DIR = "/content/drive/MyDrive/DAS_experiment"
+
+try:
+    from google.colab import drive
+    drive.mount("/content/drive")
+    os.makedirs(DRIVE_DIR, exist_ok=True)
+    SAVE_DIR = os.path.join(DRIVE_DIR, "saved_models_nli_sanity")
+    os.makedirs(SAVE_DIR, exist_ok=True)
+    print(f"Google Drive mounted. Saving to {SAVE_DIR}")
+except ImportError:
+    SAVE_DIR = "saved_models_nli_sanity"
+    os.makedirs(SAVE_DIR, exist_ok=True)
+    print(f"Not on Colab. Saving to {SAVE_DIR}")
+
+# ── 1. Repo & data setup ─────────────────────────────────────
 
 if not os.path.exists("layered_intervenable_model.py"):
     if os.path.exists("GeigerExperiment/layered_intervenable_model.py"):
@@ -47,9 +63,6 @@ for _fname in ["pmonli.jsonl", "nmonli_train.jsonl", "nmonli_test.jsonl"]:
     if not os.path.exists(_path):
         print(f"  Downloading {_fname} ...")
         urllib.request.urlretrieve(f"{_MONLI_URL}/{_fname}", _path)
-
-SAVE_DIR = "saved_models_nli_sanity"
-os.makedirs(SAVE_DIR, exist_ok=True)
 
 # Handle --retrain flag
 if "--retrain" in sys.argv:
