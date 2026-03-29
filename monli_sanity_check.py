@@ -25,22 +25,23 @@ subprocess.check_call(
      "transformers==4.36.2", "torch", "scikit-learn", "pandas", "scipy"],
     stdout=subprocess.DEVNULL)
 
-# ── 0.5. Mount Google Drive for persistent storage ────────────
+# ── 0.5. Google Drive for persistent storage ─────────────────
+# Mount Drive in a notebook cell BEFORE running this script:
+#   from google.colab import drive
+#   drive.mount("/content/drive")
 import glob, os, time, urllib.request
 
 DRIVE_DIR = "/content/drive/MyDrive/DAS_experiment"
 
-try:
-    from google.colab import drive
-    drive.mount("/content/drive")
+if os.path.isdir("/content/drive/MyDrive"):
     os.makedirs(DRIVE_DIR, exist_ok=True)
     SAVE_DIR = os.path.join(DRIVE_DIR, "saved_models_nli_sanity")
     os.makedirs(SAVE_DIR, exist_ok=True)
-    print(f"Google Drive mounted. Saving to {SAVE_DIR}")
-except ImportError:
+    print(f"Google Drive detected. Saving to {SAVE_DIR}")
+else:
     SAVE_DIR = "saved_models_nli_sanity"
     os.makedirs(SAVE_DIR, exist_ok=True)
-    print(f"Not on Colab. Saving to {SAVE_DIR}")
+    print(f"No Google Drive. Saving locally to {SAVE_DIR}")
 
 # ── 1. Repo & data setup ─────────────────────────────────────
 
